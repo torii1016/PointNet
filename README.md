@@ -1,4 +1,4 @@
 # PointNet
 
 ## Training
-	- python scripts/train.py 
+- python scripts/train.py 
