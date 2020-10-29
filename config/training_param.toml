@@ -1,0 +1,13 @@
+[network]
+pointnet_config = "config/pointnet.toml"
+input_tnet_config = "config/input_tnet.toml"
+feature_tnet_config = "config/feature_tnet.toml"
+
+[train]
+batch_size = 100
+num_points = 64
+epoch = 100
+lr = 0.001
+val_step = 20
+use_gpu = true
+output_class = 1

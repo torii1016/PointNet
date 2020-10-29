@@ -1,0 +1,66 @@
+[network]
+name = 'InputTNet'
+reshape = true
+
+[layer1]
+type = 'conv2d'
+name = 'conv1'
+output_channel = 64
+stride = 1
+fileter_size = [3,1]
+padding = 'VALID'
+bn=true
+activation_fn = 'ReLU'
+
+[layer2]
+type = 'conv2d'
+name = 'conv2'
+output_channel = 128
+stride = 1
+fileter_size = [1,1]
+padding = 'VALID'
+bn=true
+activation_fn = 'ReLU'
+
+[layer3]
+type = 'conv2d'
+name = 'conv3'
+output_channel = 1024
+stride = 1
+fileter_size = [1,1]
+padding = 'VALID'
+bn=true
+activation_fn = 'ReLU'
+
+[layer4]
+type = 'maxpool'
+karnel_size = [1,64,1,1] #num points
+stride = [1,2,2,1]
+padding = 'VALID'
+
+[layer5]
+type = 'reshape'
+shape = [100, -1]  #batch_size
+
+[layer6]
+type = 'fc'
+name = 'fc1'
+output_channel = 512
+bn=true
+activation_fn = 'ReLU'
+dropout = false
+drate = 0
+
+[layer7]
+type = 'fc'
+name = 'fc2'
+output_channel = 256
+bn=true
+activation_fn = 'ReLU'
+dropout = false
+drate = 0
+
+[layer8]
+type = 'transform'
+name = 'trans'
+K = 3
