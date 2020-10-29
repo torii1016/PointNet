@@ -6,12 +6,12 @@ import numpy as np
 import tensorflow as tf
 
 def get_rand_variable(name, shape, stddev, trainable = True):
-    return tf.get_variable('weights{}'.format(name), shape,
+    return tf.compat.v1.get_variable('weights{}'.format(name), shape,
                            initializer = tf.random_normal_initializer(stddev = stddev),
                            trainable = trainable)
 
 def get_const_variable(name, shape, value, trainable = True):
-    return tf.get_variable('biases{}'.format(name), shape,
+    return tf.compat.v1.get_variable('biases{}'.format(name), shape,
                            initializer = tf.constant_initializer(value),
                            trainable = trainable)
 

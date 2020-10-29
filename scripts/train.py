@@ -3,6 +3,7 @@ import sys
 import numpy as np
 import toml
 from tqdm import tqdm
+from collections import OrderedDict
 
 import tensorflow as tf
 
@@ -20,47 +21,54 @@ def data_sampler(batch_size, num_points):
 
     data_shuffle = np.random.permutation(list(range(batch_size)))
 
-    return input_datas[data_shuffle,:,:].reshape(-1,3), input_labels[data_shuffle].reshape(-1,1)
+    return input_datas[data_shuffle,:,:], input_labels[data_shuffle].reshape(-1,1)
 
 
-def train(config_dict):
+def train(config):
 
-    batch_size = 10
-    num_points = 64
-    epoch = 100
-    lr = 0.001
+    pointnet_config = toml.load(open(config["network"]["pointnet_config"]))
+    input_tnet_config = toml.load(open(config["network"]["input_tnet_config"]))
+    feature_tnet_config = toml.load(open(config["network"]["feature_tnet_config"]))
 
+    batch_size = config["train"]["batch_size"]
+    num_points = config["train"]["num_points"]
+    epoch = config["train"]["epoch"]
+    val_step = config["train"]["val_step"]
+    use_gpu = config["train"]["use_gpu"]
 
-    pointnet = PointNet(3, 1, lr)
+    pointnet = PointNet(config["train"], pointnet_config, input_tnet_config, feature_tnet_config)
     pointnet.set_model()
 
-    #saver = tf.compat.v1.train.Saver
-    sess = tf.compat.v1.Session()
+    if use_gpu:
+        config = tf.ConfigProto(
+            gpu_options=tf.GPUOptions(
+                per_process_gpu_memory_fraction=0.8,
+                allow_growth=True
+            )
+        )
+    else:
+        config = tf.ConfigProto(
+            device_count = {'GPU': 0}
+        )
+
+    sess = tf.compat.v1.Session(config=config)
     init = tf.compat.v1.global_variables_initializer()
     sess.run(init)
 
     # train
-    accuracy_list = []
-    loss_list = []
+    accuracy = 0.0
     with tqdm(range(epoch)) as pbar:
         for i, ch in enumerate(pbar):
             input_datas, input_labels = data_sampler(batch_size,num_points)
-
-            print("input_datas: {}".format(input_datas.shape))
-            print("input_labels: {}".format(input_labels.shape))
             _, loss = pointnet.train(sess, input_datas, input_labels)
-            loss_list.append(loss)
-            pbar.set_postfix(OrderedDict(loss=loss))
-
-            print(i)
-    """
-    # test
-    accuracy = 0
-    for j in range(0, test_data.shape[0], 100):
-        data = test_data[j:j+100]
-        label = test_label[j:j+100]
-        accuracy += int(network.test(sess, data, label)[0]*data.shape[0])
-    """
+            pbar.set_postfix(OrderedDict(loss=loss, accuracy=accuracy))
+        
+            if i%val_step==0: # test
+                input_datas, input_labels = data_sampler(batch_size,num_points)
+                output = pointnet.get_output(sess, input_datas)[0]
+                output[output>0.5]=1
+                output[output<0.5]=0
+                accuracy = (output==input_labels).sum().item()/batch_size
 
 
 if __name__ == '__main__':
@@ -68,5 +76,6 @@ if __name__ == '__main__':
     parser = argparse.ArgumentParser( description='Process some integers' )
     parser.add_argument( '--config', default="config/config.toml", type=str, help="default: config/config.toml")
     args = parser.parse_args()
-    #train(toml.load(open(args.config)))
-    train(None)
+
+    train(toml.load(open("config/training_param.toml")))
+    #train(None)

@@ -4,7 +4,7 @@ import tensorflow as tf
 from .variable_util import get_const_variable, get_rand_variable
 from .sn import spectral_norm
 
-def conv(name, inputs, out_num, filter_width, filter_height, stride):
+def conv(name, inputs, out_num, filter_width, filter_height, stride, padding='SAME'):
 
     # ** NOTICE: weight shape is [height, width, in_chanel, out_chanel] **
     
@@ -16,7 +16,7 @@ def conv(name, inputs, out_num, filter_width, filter_height, stride):
     
     conved = tf.nn.conv2d(inputs, weights,
                           strides=[1, stride,  stride,  1],
-                          padding = 'SAME')
+                          padding = padding)
     
     return tf.nn.bias_add(conved, biases)
 
