@@ -1,9 +1,11 @@
 import argparse
 import sys
+import os
 import numpy as np
 import toml
 from tqdm import tqdm
 from collections import OrderedDict
+from datetime import datetime
 
 import tensorflow as tf
 
@@ -24,51 +26,74 @@ def data_sampler(batch_size, num_points):
     return input_datas[data_shuffle,:,:], input_labels[data_shuffle].reshape(-1,1)
 
 
-def train(config):
+class Trainer(object):
+    def __init__(self, config):
+        pointnet_config = toml.load(open(config["network"]["pointnet_config"]))
+        input_tnet_config = toml.load(open(config["network"]["input_tnet_config"]))
+        feature_tnet_config = toml.load(open(config["network"]["feature_tnet_config"]))
 
-    pointnet_config = toml.load(open(config["network"]["pointnet_config"]))
-    input_tnet_config = toml.load(open(config["network"]["input_tnet_config"]))
-    feature_tnet_config = toml.load(open(config["network"]["feature_tnet_config"]))
+        self._batch_size = config["train"]["batch_size"]
+        self._num_points = config["train"]["num_points"]
+        self._epoch = config["train"]["epoch"]
+        self._val_step = config["train"]["val_step"]
+        self._use_gpu = config["train"]["use_gpu"]
+        self._save_model_path = config["train"]["save_model_path"]
+        self._save_model_name = config["train"]["save_model_name"]
 
-    batch_size = config["train"]["batch_size"]
-    num_points = config["train"]["num_points"]
-    epoch = config["train"]["epoch"]
-    val_step = config["train"]["val_step"]
-    use_gpu = config["train"]["use_gpu"]
+        self._pointnet = PointNet(config["train"], pointnet_config, input_tnet_config, feature_tnet_config)
+        self._pointnet.set_model()
 
-    pointnet = PointNet(config["train"], pointnet_config, input_tnet_config, feature_tnet_config)
-    pointnet.set_model()
-
-    if use_gpu:
-        config = tf.ConfigProto(
-            gpu_options=tf.GPUOptions(
-                per_process_gpu_memory_fraction=0.8,
-                allow_growth=True
+        if self._use_gpu:
+            config = tf.ConfigProto(
+                gpu_options=tf.GPUOptions(
+                    per_process_gpu_memory_fraction=0.8,
+                    allow_growth=True
+                )
             )
-        )
-    else:
-        config = tf.ConfigProto(
-            device_count = {'GPU': 0}
-        )
+        else:
+            config = tf.ConfigProto(
+                device_count = {'GPU': 0}
+            )
 
-    sess = tf.compat.v1.Session(config=config)
-    init = tf.compat.v1.global_variables_initializer()
-    sess.run(init)
+        self._sess = tf.compat.v1.Session(config=config)
+        init = tf.compat.v1.global_variables_initializer()
+        self._sess.run(init)
+        self._saver = tf.train.Saver()
 
-    # train
-    accuracy = 0.0
-    with tqdm(range(epoch)) as pbar:
-        for i, ch in enumerate(pbar):
-            input_datas, input_labels = data_sampler(batch_size,num_points)
-            _, loss = pointnet.train(sess, input_datas, input_labels)
-            pbar.set_postfix(OrderedDict(loss=loss, accuracy=accuracy))
-        
-            if i%val_step==0: # test
-                input_datas, input_labels = data_sampler(batch_size,num_points)
-                output = pointnet.get_output(sess, input_datas)[0]
-                output[output>0.5]=1
-                output[output<0.5]=0
-                accuracy = (output==input_labels).sum().item()/batch_size
+        self._accuracy = 0.0
+
+        self._tensorboard_path = "./logs/" + datetime.today().strftime('%Y-%m-%d-%H-%M-%S')
+
+
+    def _save_model(self):
+        os.makedirs(self._save_model_path, exist_ok=True)
+        self._saver.save(self._sess, self._save_model_path+"/"+self._save_model_name)
+
+
+    def _save_tensorboard(self, loss):
+        with tf.name_scope('log'):
+            tf.summary.scalar('loss', loss)
+            merged = tf.summary.merge_all()
+            writer = tf.summary.FileWriter(self._tensorboard_path, self._sess.graph)
+
+
+    def train(self):
+        with tqdm(range(self._epoch)) as pbar:
+            for i, ch in enumerate(pbar): #train
+                input_datas, input_labels = data_sampler(self._batch_size, self._num_points)
+                _, loss = self._pointnet.train(self._sess, input_datas, input_labels)
+                pbar.set_postfix(OrderedDict(loss=loss, accuracy=self._accuracy))
+
+                self._save_tensorboard(loss)
+
+                if i%self._val_step==0: #test
+                    input_datas, input_labels = data_sampler(self._batch_size, self._num_points)
+                    output = self._pointnet.get_output(self._sess, input_datas)[0]
+                    output[output>0.5]=1
+                    output[output<0.5]=0
+                    self._accuracy = (output==input_labels).sum().item()/self._batch_size
+
+                    self._save_model()
 
 
 if __name__ == '__main__':
@@ -77,5 +102,5 @@ if __name__ == '__main__':
     parser.add_argument( '--config', default="config/config.toml", type=str, help="default: config/config.toml")
     args = parser.parse_args()
 
-    train(toml.load(open("config/training_param.toml")))
-    #train(None)
+    trainer = Trainer(toml.load(open("config/training_param.toml")))
+    trainer.train()

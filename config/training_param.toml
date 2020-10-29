@@ -11,3 +11,5 @@ lr = 0.001
 val_step = 20
 use_gpu = true
 output_class = 1
+save_model_path = "saved_model"
+save_model_name = "model.dump"
